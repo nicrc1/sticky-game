@@ -1,180 +1,470 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- ... previous head content ... -->
-<script>
-class Game {
-    constructor() {
-        // ... previous constructor content ...
-        
-        // Add particle system
-        this.particles = [];
-        this.powerupEffects = {
-            pulseSize: 0,
-            pulseDirection: 1,
-            glowOpacity: 0.5,
-            particleTimer: 0
-        };
-    }
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sticky Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #f0f0f0;
+            display: block;
+            margin: 0 auto;
+            touch-action: none;
+        }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        .control-btn {
+            padding: 20px 40px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 24px;
+            touch-action: none;
+            cursor: pointer;
+        }
+        #gameOverScreen {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            color: white;
+            display: none;
+        }
+        #playAgainBtn {
+            padding: 10px 20px;
+            font-size: 18px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        #powerupTimer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: #ff4081;
+            font-size: 20px;
+            font-weight: bold;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="375" height="600"></canvas>
+    <div id="controls">
+        <button class="control-btn" id="leftBtn">←</button>
+        <button class="control-btn" id="rightBtn">→</button>
+    </div>
+    <div id="powerupTimer">Power-up: <span id="timer">0</span>s</div>
+    <div id="gameOverScreen">
+        <h2>Game Over!</h2>
+        <p>Score: <span id="finalScore">0</span></p>
+        <button id="playAgainBtn">Play Again</button>
+    </div>
 
-    // Add this new method for particle creation
-    createParticle() {
-        return {
-            x: this.player.x + this.player.width/2,
-            y: this.player.y + this.player.height/2,
-            size: Math.random() * 4 + 2,
-            speedX: (Math.random() - 0.5) * 4,
-            speedY: (Math.random() - 0.5) * 4,
-            life: 1.0  // Will decrease over time
-        };
-    }
+    <script>
+        class Game {
+            constructor() {
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.width = this.canvas.width;
+                this.height = this.canvas.height;
+                
+                this.init();
+                this.setupControls();
+                this.gameLoop();
+            }
 
-    // Add this method to update particles
-    updateParticles() {
-        // Create new particles when powered up
-        if (this.powerupActive) {
-            this.powerupEffects.particleTimer++;
-            if (this.powerupEffects.particleTimer % 2 === 0) {  // Control particle creation rate
-                this.particles.push(this.createParticle());
+            init() {
+                // Player properties
+                this.player = {
+                    x: this.width / 2,
+                    y: this.height - 100,
+                    width: 40,
+                    height: 40,
+                    velocityY: 0,
+                    velocityX: 0,
+                    baseJumpForce: -15,
+                    jumpForce: -15,
+                    gravity: 0.6,
+                    speed: 5
+                };
+
+                // Game state
+                this.score = 0;
+                this.gameOver = false;
+                this.platforms = [];
+                this.powerups = [];
+                this.particles = [];
+                this.powerupActive = false;
+                this.powerupTimer = 0;
+                this.powerupEffects = {
+                    pulseSize: 0,
+                    pulseDirection: 1,
+                    glowOpacity: 0.5,
+                    particleTimer: 0
+                };
+                this.keys = { left: false, right: false };
+
+                this.initPlatforms();
+            }
+
+            initPlatforms() {
+                // Starting platform
+                this.platforms = [{
+                    x: this.width / 2 - 50,
+                    y: this.height - 50,
+                    width: 100,
+                    height: 10,
+                    type: 'normal'
+                }];
+
+                // Add more platforms
+                for (let i = 1; i < 7; i++) {
+                    this.addPlatform(this.height - (i * 100));
+                }
+            }addPlatform(y) {
+                const platform = {
+                    x: Math.random() * (this.width - 60),
+                    y: y,
+                    width: 60,
+                    height: 10,
+                    type: Math.random() < 0.2 ? 'breakable' : 'normal'
+                };
+
+                if (Math.random() < 0.2) {
+                    this.powerups.push({
+                        x: platform.x + platform.width/2 - 10,
+                        y: platform.y - 30,
+                        width: 20,
+                        height: 20,
+                        type: 'jumpBoost'
+                    });
+                }
+
+                this.platforms.push(platform);
+            }
+
+            createParticle() {
+                return {
+                    x: this.player.x + this.player.width/2,
+                    y: this.player.y + this.player.height/2,
+                    size: Math.random() * 4 + 2,
+                    speedX: (Math.random() - 0.5) * 4,
+                    speedY: (Math.random() - 0.5) * 4,
+                    life: 1.0
+                };
+            }
+
+            setupControls() {
+                document.addEventListener('keydown', (e) => {
+                    switch(e.key) {
+                        case 'ArrowLeft':
+                            this.keys.left = true;
+                            break;
+                        case 'ArrowRight':
+                            this.keys.right = true;
+                            break;
+                    }
+                });
+
+                document.addEventListener('keyup', (e) => {
+                    switch(e.key) {
+                        case 'ArrowLeft':
+                            this.keys.left = false;
+                            break;
+                        case 'ArrowRight':
+                            this.keys.right = false;
+                            break;
+                    }
+                });
+
+                const leftBtn = document.getElementById('leftBtn');
+                const rightBtn = document.getElementById('rightBtn');
+
+                // Touch controls
+                const handleTouch = (e, button, isStart) => {
+                    e.preventDefault();
+                    if (button === 'left') {
+                        this.keys.left = isStart;
+                    } else {
+                        this.keys.right = isStart;
+                    }
+                };
+
+                leftBtn.addEventListener('touchstart', (e) => handleTouch(e, 'left', true));
+                leftBtn.addEventListener('touchend', (e) => handleTouch(e, 'left', false));
+                rightBtn.addEventListener('touchstart', (e) => handleTouch(e, 'right', true));
+                rightBtn.addEventListener('touchend', (e) => handleTouch(e, 'right', false));
+
+                // Mouse controls
+                leftBtn.addEventListener('mousedown', () => this.keys.left = true);
+                leftBtn.addEventListener('mouseup', () => this.keys.left = false);
+                leftBtn.addEventListener('mouseleave', () => this.keys.left = false);
+                rightBtn.addEventListener('mousedown', () => this.keys.right = true);
+                rightBtn.addEventListener('mouseup', () => this.keys.right = false);
+                rightBtn.addEventListener('mouseleave', () => this.keys.right = false);
+            }
+
+            updateParticles() {
+                if (this.powerupActive) {
+                    this.powerupEffects.particleTimer++;
+                    if (this.powerupEffects.particleTimer % 2 === 0) {
+                        this.particles.push(this.createParticle());
+                    }
+                }
+
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    const particle = this.particles[i];
+                    particle.x += particle.speedX;
+                    particle.y += particle.speedY;
+                    particle.life -= 0.02;
+                    
+                    if (particle.life <= 0) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+
+                if (this.powerupActive) {
+                    this.powerupEffects.pulseSize += 0.2 * this.powerupEffects.pulseDirection;
+                    if (this.powerupEffects.pulseSize > 5 || this.powerupEffects.pulseSize < 0) {
+                        this.powerupEffects.pulseDirection *= -1;
+                    }
+                    
+                    this.powerupEffects.glowOpacity = 0.3 + Math.sin(Date.now() / 200) * 0.2;
+                }
+            }
+
+            updatePowerup() {
+                if (this.powerupActive) {
+                    this.powerupTimer--;
+                    document.getElementById('timer').textContent = this.powerupTimer;
+                    
+                    if (this.powerupTimer <= 0) {
+                        this.powerupActive = false;
+                        this.player.jumpForce = this.player.baseJumpForce;
+                        document.getElementById('powerupTimer').style.display = 'none';
+                    }
+                }
+            }
+
+            update() {
+                if (this.gameOver) return;
+
+                this.updatePowerup();
+                this.updateParticles();
+
+                if (this.keys.left) {
+                    this.player.velocityX = -this.player.speed;
+                } else if (this.keys.right) {
+                    this.player.velocityX = this.player.speed;
+                } else {
+                    this.player.velocityX = 0;
+                }
+
+                this.player.velocityY += this.player.gravity;
+                this.player.y += this.player.velocityY;
+                this.player.x += this.player.velocityX;
+
+                if (this.player.x > this.width) {
+                    this.player.x = 0;
+                } else if (this.player.x < 0) {
+                    this.player.x = this.width;
+                }
+
+                // Check collisions
+                for (let i = this.powerups.length - 1; i >= 0; i--) {
+                    const powerup = this.powerups[i];
+                    if (this.checkCollision(this.player, powerup)) {
+                        this.powerups.splice(i, 1);
+                        this.activatePowerup();
+                    }
+                }
+
+                for (let platform of this.platforms) {
+                    if (this.player.velocityY > 0 && this.checkCollision(this.player, platform)) {
+                        if (platform.type === 'breakable') {
+                            this.platforms = this.platforms.filter(p => p !== platform);
+                        }
+                        this.player.velocityY = this.player.jumpForce;
+                        this.score += 10;
+                    }
+                }
+
+                // Camera follow
+                if (this.player.y < this.height / 2) {
+                    const diff = this.height / 2 - this.player.y;
+                    this.player.y += diff;
+                    
+                    this.platforms.forEach(platform => platform.y += diff);
+                    this.powerups.forEach(powerup => powerup.y += diff);
+                    this.particles.forEach(particle => particle.y += diff);
+
+                    this.platforms = this.platforms.filter(platform => platform.y < this.height);
+                    this.powerups = this.powerups.filter(powerup => powerup.y < this.height);
+
+                    while (this.platforms.length < 7) {
+                        this.addPlatform(0);
+                    }
+                }
+
+                if (this.player.y > this.height) {
+                    this.gameOver = true;
+                    this.showGameOver();
+                }
+            }
+
+            checkCollision(a, b) {
+                return a.x < b.x + b.width &&
+                       a.x + a.width > b.x &&
+                       a.y < b.y + b.height &&
+                       a.y + a.height > b.y;
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+
+                // Draw platforms
+                this.platforms.forEach(platform => {
+                    this.ctx.fillStyle = platform.type === 'breakable' ? '#ff9999' : '#66cc66';
+                    this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+                });
+
+                // Draw power-ups with glow
+                this.powerups.forEach(powerup => {
+                    // Glow effect
+                    const gradient = this.ctx.createRadialGradient(
+                        powerup.x + 10, powerup.y + 10, 0,
+                        powerup.x + 10, powerup.y + 10, 20
+                    );
+                    gradient.addColorStop(0, 'rgba(255, 64, 129, 0.8)');
+                    gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
+                    
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.fillRect(powerup.x - 10, powerup.y - 10, 40, 40);
+                    
+                    this.ctx.fillStyle = '#ff4081';
+                    this.ctx.beginPath();
+                    this.ctx.arc(powerup.x + 10, powerup.y + 10, 10, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+
+                // Draw particles
+                this.particles.forEach(particle => {
+                    this.ctx.fillStyle = `rgba(255, 64, 129, ${particle.life})`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+
+                // Draw player with power-up effects
+                if (this.powerupActive) {
+                    // Glow
+                    const gradient = this.ctx.createRadialGradient(
+                        this.player.x + this.player.width/2,
+                        this.player.y + this.player.height/2,
+                        0,
+                        this.player.x + this.player.width/2,
+                        this.player.y + this.player.height/2,
+                        this.player.width
+                    );
+                    gradient.addColorStop(0, `rgba(255, 64, 129, ${this.powerupEffects.glowOpacity})`);
+                    gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
+                    
+                    this.ctx.fillStyle = gradient;
+                    this.ctx.fillRect(
+                        this.player.x - 20,
+                        this.player.y - 20,
+                        this.player.width + 40,
+                        this.player.height + 40
+                    );
+
+                    // Pulse effect
+                    this.ctx.strokeStyle = '#ff4081';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.strokeRect(
+                        this.player.x - this.powerupEffects.pulseSize,
+                        this.player.y - this.powerupEffects.pulseSize,
+                        this.player.width + this.powerupEffects.pulseSize * 2,
+                        this.player.height + this.powerupEffects.pulseSize * 2
+                    );
+                }
+
+                // Draw player
+                this.ctx.fillStyle = this.powerupActive ? '#ff4081' : '#3366ff';
+                this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height);
+
+                // Score
+                this.ctx.fillStyle = '#000';
+                this.ctx.font = '20px Arial';
+                this.ctx.textAlign = 'left';
+                this.ctx.fillText(`Score: ${this.score}`, 10, 30);
+            }
+
+            activatePowerup() {
+                this.powerupActive = true;
+                this.powerupTimer = 60;
+                this.player.jumpForce = this.player.baseJumpForce * 1.5;
+                document.getElementById('powerupTimer').style.display = 'block';
+                this.powerupEffects = {
+                    pulseSize: 0,
+                    pulseDirection: 1,
+                    glowOpacity: 0.5,
+                    particleTimer: 0
+                };
+            }
+
+            showGameOver() {
+                document.getElementById('finalScore').textContent = this.score;
+                document.getElementById('gameOverScreen').style.display = 'block';
+                if (window.TelegramGameProxy) {
+                    window.TelegramGameProxy.shareScore(this.score);
+                }
+            }
+
+            restart() {
+                document.getElementById('gameOverScreen').style.display = 'none';
+                document.getElementById('powerupTimer').style.display = 'none';
+                this.init();
+            }
+
+            gameLoop() {
+                this.update();
+                this.draw();
+                requestAnimationFrame(() => this.gameLoop());
             }
         }
 
-        // Update existing particles
-        for (let i = this.particles.length - 1; i >= 0; i--) {
-            const particle = this.particles[i];
-            particle.x += particle.speedX;
-            particle.y += particle.speedY;
-            particle.life -= 0.02;  // Particle fade rate
-            
-            if (particle.life <= 0) {
-                this.particles.splice(i, 1);
-            }
-        }
-
-        // Update pulse effect
-        if (this.powerupActive) {
-            this.powerupEffects.pulseSize += 0.2 * this.powerupEffects.pulseDirection;
-            if (this.powerupEffects.pulseSize > 5 || this.powerupEffects.pulseSize < 0) {
-                this.powerupEffects.pulseDirection *= -1;
-            }
-            
-            this.powerupEffects.glowOpacity = 0.3 + Math.sin(Date.now() / 200) * 0.2;
-        }
-    }
-
-    // Modify the draw method
-    draw() {
-        this.ctx.clearRect(0, 0, this.width, this.height);
-
-        // Draw platforms
-        this.platforms.forEach(platform => {
-            this.ctx.fillStyle = platform.type === 'breakable' ? '#ff9999' : '#66cc66';
-            this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-        });
-
-        // Draw power-ups
-        this.powerups.forEach(powerup => {
-            // Draw glow effect for power-ups
-            const gradient = this.ctx.createRadialGradient(
-                powerup.x + 10, powerup.y + 10, 0,
-                powerup.x + 10, powerup.y + 10, 20
-            );
-            gradient.addColorStop(0, 'rgba(255, 64, 129, 0.8)');
-            gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
-            
-            this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(powerup.x - 10, powerup.y - 10, 40, 40);
-            
-            this.ctx.fillStyle = '#ff4081';
-            this.ctx.beginPath();
-            this.ctx.arc(powerup.x + 10, powerup.y + 10, 10, 0, Math.PI * 2);
-            this.ctx.fill();
-        });
-
-        // Draw particles
-        this.particles.forEach(particle => {
-            this.ctx.fillStyle = `rgba(255, 64, 129, ${particle.life})`;
-            this.ctx.beginPath();
-            this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-            this.ctx.fill();
-        });
-
-        // Draw player with effects when powered up
-        if (this.powerupActive) {
-            // Draw glow effect
-            const gradient = this.ctx.createRadialGradient(
-                this.player.x + this.player.width/2,
-                this.player.y + this.player.height/2,
-                0,
-                this.player.x + this.player.width/2,
-                this.player.y + this.player.height/2,
-                this.player.width
-            );
-            gradient.addColorStop(0, `rgba(255, 64, 129, ${this.powerupEffects.glowOpacity})`);
-            gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
-            
-            this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(
-                this.player.x - 20,
-                this.player.y - 20,
-                this.player.width + 40,
-                this.player.height + 40
-            );
-
-            // Draw pulsing outline
-            this.ctx.strokeStyle = '#ff4081';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(
-                this.player.x - this.powerupEffects.pulseSize,
-                this.player.y - this.powerupEffects.pulseSize,
-                this.player.width + this.powerupEffects.pulseSize * 2,
-                this.player.height + this.powerupEffects.pulseSize * 2
-            );
-        }
-
-        // Draw player
-        this.ctx.fillStyle = this.powerupActive ? '#ff4081' : '#3366ff';
-        this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height);
-
-        // Add shine effect when powered up
-        if (this.powerupActive) {
-            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-            this.ctx.beginPath();
-            this.ctx.moveTo(this.player.x, this.player.y);
-            this.ctx.lineTo(this.player.x + 15, this.player.y);
-            this.ctx.lineTo(this.player.x, this.player.y + 15);
-            this.ctx.fill();
-        }
-
-        // Draw score
-        this.ctx.fillStyle = '#000';
-        this.ctx.font = '20px Arial';
-        this.ctx.textAlign = 'left';
-        this.ctx.fillText(`Score: ${this.score}`, 10, 30);
-    }
-
-    update() {
-        if (this.gameOver) return;
-
-        this.updatePowerup();
-        this.updateParticles();  // Add this line to update particles
-
-        // ... rest of the update method remains the same ...
-    }
-
-    activatePowerup() {
-        this.powerupActive = true;
-        this.powerupTimer = 60;
-        this.player.jumpForce = this.player.baseJumpForce * 1.5;
-        this.powerupEffects = {
-            pulseSize: 0,
-            pulseDirection: 1,
-            glowOpacity: 0.5,
-            particleTimer: 0
+        // Initialize game and setup restart functionality
+        window.onload = () => {
+            let game = new Game();
+            document.getElementById('playAgainBtn').addEventListener('click', () => {
+                game.restart();
+            });
         };
-        document.getElementById('powerupTimer').style.display = 'block';
-    }
-
-    // ... rest of the class remains the same ...
-}
-</script>
+    </script>
+</body>
 </html>
