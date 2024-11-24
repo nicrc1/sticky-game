@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Sticky Game</title>
     <style>
         body {
@@ -22,18 +22,33 @@
             margin: 0 auto;
             touch-action: none;
         }
-        @media (max-width: 480px) {
-            body { padding: 10px; }
-            canvas { width: 100%; }
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            display: flex;
+            gap: 20px;
+        }
+        .control-btn {
+            padding: 20px 40px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 24px;
+            touch-action: none;
         }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="375" height="600"></canvas>
+    <div id="controls">
+        <button class="control-btn" id="leftBtn">←</button>
+        <button class="control-btn" id="rightBtn">→</button>
+    </div>
     <script>
         class Game {
             constructor() {
-                console.log("Game initializing..."); // Debug log
+                console.log("Game initializing...");
                 this.canvas = document.getElementById('gameCanvas');
                 this.ctx = this.canvas.getContext('2d');
                 this.width = this.canvas.width;
@@ -48,26 +63,28 @@
                     velocityY: 0,
                     velocityX: 0,
                     jumpForce: -15,
-                    gravity: 0.6
+                    gravity: 0.6,
+                    speed: 5  // Adjusted speed
                 };
 
                 // Game state
                 this.score = 0;
                 this.gameOver = false;
                 this.platforms = [];
+                this.keys = {
+                    left: false,
+                    right: false
+                };
                 
-                // Initialize game
                 this.initPlatforms();
                 this.setupControls();
                 
-                // Start game loop
-                console.log("Starting game loop..."); // Debug log
+                console.log("Starting game loop...");
                 this.lastTime = 0;
-                requestAnimationFrame(this.animate.bind(this));
+                this.gameLoop();
             }
 
             initPlatforms() {
-                console.log("Initializing platforms..."); // Debug log
                 for (let i = 0; i < 7; i++) {
                     this.platforms.push({
                         x: Math.random() * (this.width - 60),
@@ -80,37 +97,75 @@
             }
 
             setupControls() {
-                console.log("Setting up controls..."); // Debug log
-                
-                // Touch controls
-                this.canvas.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    const touch = e.touches[0];
-                    const rect = this.canvas.getBoundingClientRect();
-                    const x = touch.clientX - rect.left;
-                    this.player.velocityX = (x < this.width / 2) ? -8 : 8;
-                });
-
-                this.canvas.addEventListener('touchend', () => {
-                    this.player.velocityX = 0;
-                });
-
                 // Keyboard controls
-                window.addEventListener('keydown', (e) => {
-                    console.log("Key pressed:", e.key); // Debug log
-                    if (e.key === 'ArrowLeft') this.player.velocityX = -8;
-                    if (e.key === 'ArrowRight') this.player.velocityX = 8;
-                });
-
-                window.addEventListener('keyup', (e) => {
-                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                        this.player.velocityX = 0;
+                document.addEventListener('keydown', (e) => {
+                    console.log('Key pressed:', e.key);
+                    switch(e.key) {
+                        case 'ArrowLeft':
+                            this.keys.left = true;
+                            break;
+                        case 'ArrowRight':
+                            this.keys.right = true;
+                            break;
                     }
                 });
+
+                document.addEventListener('keyup', (e) => {
+                    console.log('Key released:', e.key);
+                    switch(e.key) {
+                        case 'ArrowLeft':
+                            this.keys.left = false;
+                            break;
+                        case 'ArrowRight':
+                            this.keys.right = false;
+                            break;
+                    }
+                });
+
+                // Touch controls
+                const leftBtn = document.getElementById('leftBtn');
+                const rightBtn = document.getElementById('rightBtn');
+
+                // Touch controls for buttons
+                leftBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.keys.left = true;
+                });
+                leftBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.keys.left = false;
+                });
+
+                rightBtn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    this.keys.right = true;
+                });
+                rightBtn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    this.keys.right = false;
+                });
+
+                // Mouse controls for buttons (for testing)
+                leftBtn.addEventListener('mousedown', () => this.keys.left = true);
+                leftBtn.addEventListener('mouseup', () => this.keys.left = false);
+                leftBtn.addEventListener('mouseleave', () => this.keys.left = false);
+
+                rightBtn.addEventListener('mousedown', () => this.keys.right = true);
+                rightBtn.addEventListener('mouseup', () => this.keys.right = false);
+                rightBtn.addEventListener('mouseleave', () => this.keys.right = false);
             }
 
             update() {
                 if (this.gameOver) return;
+
+                // Handle movement based on keys
+                if (this.keys.left) {
+                    this.player.velocityX = -this.player.speed;
+                } else if (this.keys.right) {
+                    this.player.velocityX = this.player.speed;
+                } else {
+                    this.player.velocityX = 0;
+                }
 
                 // Update player physics
                 this.player.velocityY += this.player.gravity;
@@ -126,7 +181,7 @@
 
                 // Check platform collisions
                 for (let platform of this.platforms) {
-                    if (this.player.velocityY > 0 && // Moving downward
+                    if (this.player.velocityY > 0 &&
                         this.player.x < platform.x + platform.width &&
                         this.player.x + this.player.width > platform.x &&
                         this.player.y + this.player.height > platform.y &&
@@ -150,7 +205,6 @@
                         platform.y += diff;
                     }
 
-                    // Remove platforms that are off screen and add new ones
                     this.platforms = this.platforms.filter(platform => platform.y < this.height);
                     while (this.platforms.length < 7) {
                         this.platforms.push({
@@ -165,7 +219,7 @@
 
                 // Game over condition
                 if (this.player.y > this.height) {
-                    console.log("Game Over! Score:", this.score); // Debug log
+                    console.log("Game Over! Score:", this.score);
                     this.gameOver = true;
                     if (window.TelegramGameProxy) {
                         window.TelegramGameProxy.shareScore(this.score);
@@ -191,6 +245,10 @@
                 this.ctx.font = '20px Arial';
                 this.ctx.fillText(`Score: ${this.score}`, 10, 30);
 
+                // Draw debug info
+                this.ctx.fillText(`Left: ${this.keys.left}`, 10, 50);
+                this.ctx.fillText(`Right: ${this.keys.right}`, 10, 70);
+
                 // Game over screen
                 if (this.gameOver) {
                     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -200,22 +258,21 @@
                     this.ctx.textAlign = 'center';
                     this.ctx.fillText('Game Over!', this.width/2, this.height/2);
                     this.ctx.fillText(`Score: ${this.score}`, this.width/2, this.height/2 + 40);
+                    this.ctx.font = '20px Arial';
+                    this.ctx.fillText('Click to play again', this.width/2, this.height/2 + 80);
                 }
             }
 
-            animate(timestamp) {
-                const deltaTime = timestamp - this.lastTime;
-                this.lastTime = timestamp;
-
+            gameLoop() {
                 this.update();
                 this.draw();
-                requestAnimationFrame(this.animate.bind(this));
+                requestAnimationFrame(() => this.gameLoop());
             }
         }
 
         // Start game when page loads
         window.onload = () => {
-            console.log("Window loaded, starting game..."); // Debug log
+            console.log("Window loaded, starting game...");
             new Game();
         };
     </script>
