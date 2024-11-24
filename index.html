@@ -1,289 +1,180 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Sticky Game</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            background: #222;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            font-family: Arial, sans-serif;
-        }
-        canvas {
-            border: 2px solid #333;
-            background: #f0f0f0;
-            display: block;
-            margin: 0 auto;
-            touch-action: none;
-        }
-        #controls {
-            position: fixed;
-            bottom: 20px;
-            display: flex;
-            gap: 20px;
-        }
-        .control-btn {
-            padding: 20px 40px;
-            background: rgba(255,255,255,0.2);
-            border: none;
-            border-radius: 10px;
-            color: white;
-            font-size: 24px;
-            touch-action: none;
-        }
-    </style>
-</head>
-<body>
-    <canvas id="gameCanvas" width="375" height="600"></canvas>
-    <div id="controls">
-        <button class="control-btn" id="leftBtn">←</button>
-        <button class="control-btn" id="rightBtn">→</button>
-    </div>
-    <script>
-        class Game {
-            constructor() {
-                console.log("Game initializing...");
-                this.canvas = document.getElementById('gameCanvas');
-                this.ctx = this.canvas.getContext('2d');
-                this.width = this.canvas.width;
-                this.height = this.canvas.height;
-                
-                // Player properties
-                this.player = {
-                    x: this.width / 2,
-                    y: this.height - 100,  // Start position
-                    width: 40,
-                    height: 40,
-                    velocityY: 0,
-                    velocityX: 0,
-                    jumpForce: -15,
-                    gravity: 0.6,
-                    speed: 5
-                };
-
-                // Game state
-                this.score = 0;
-                this.gameOver = false;
-                this.platforms = [];
-                this.keys = {
-                    left: false,
-                    right: false
-                };
-                
-                // Initialize game
-                this.initPlatforms();
-                this.setupControls();
-                
-                console.log("Starting game loop...");
-                this.lastTime = 0;
-                this.gameLoop();
-            }
-
-            initPlatforms() {
-                // Add starting platform directly under the player
-                const startPlatform = {
-                    x: this.width / 2 - 30,  // Center it under player
-                    y: this.height - 50,     // Just below player starting position
-                    width: 100,              // Make it wider for easier start
-                    height: 10,
-                    type: 'normal'           // Make it a normal (non-breakable) platform
-                };
-                this.platforms.push(startPlatform);
-
-                // Add remaining platforms
-                const platformCount = 7;
-                const spacing = this.height / platformCount;
-
-                for (let i = 1; i < platformCount; i++) {
-                    this.platforms.push({
-                        x: Math.random() * (this.width - 60),
-                        y: this.height - (spacing * i + Math.random() * 20), // Add some randomness
-                        width: 60,
-                        height: 10,
-                        type: Math.random() < 0.2 ? 'breakable' : 'normal'
-                    });
-                }
-
-                // Sort platforms by height to ensure proper collision detection
-                this.platforms.sort((a, b) => b.y - a.y);
-            }
-
-            setupControls() {
-                // Keyboard controls
-                document.addEventListener('keydown', (e) => {
-                    console.log('Key pressed:', e.key);
-                    switch(e.key) {
-                        case 'ArrowLeft':
-                            this.keys.left = true;
-                            break;
-                        case 'ArrowRight':
-                            this.keys.right = true;
-                            break;
-                    }
-                });
-
-                document.addEventListener('keyup', (e) => {
-                    console.log('Key released:', e.key);
-                    switch(e.key) {
-                        case 'ArrowLeft':
-                            this.keys.left = false;
-                            break;
-                        case 'ArrowRight':
-                            this.keys.right = false;
-                            break;
-                    }
-                });
-
-                // Touch controls
-                const leftBtn = document.getElementById('leftBtn');
-                const rightBtn = document.getElementById('rightBtn');
-
-                const handleTouch = (e, button, isStart) => {
-                    e.preventDefault();
-                    if (button === 'left') {
-                        this.keys.left = isStart;
-                    } else {
-                        this.keys.right = isStart;
-                    }
-                };
-
-                leftBtn.addEventListener('touchstart', (e) => handleTouch(e, 'left', true));
-                leftBtn.addEventListener('touchend', (e) => handleTouch(e, 'left', false));
-                rightBtn.addEventListener('touchstart', (e) => handleTouch(e, 'right', true));
-                rightBtn.addEventListener('touchend', (e) => handleTouch(e, 'right', false));
-
-                // Mouse controls for testing
-                leftBtn.addEventListener('mousedown', () => this.keys.left = true);
-                leftBtn.addEventListener('mouseup', () => this.keys.left = false);
-                leftBtn.addEventListener('mouseleave', () => this.keys.left = false);
-                rightBtn.addEventListener('mousedown', () => this.keys.right = true);
-                rightBtn.addEventListener('mouseup', () => this.keys.right = false);
-                rightBtn.addEventListener('mouseleave', () => this.keys.right = false);
-            }
-
-            update() {
-                if (this.gameOver) return;
-
-                // Handle movement based on keys
-                if (this.keys.left) {
-                    this.player.velocityX = -this.player.speed;
-                } else if (this.keys.right) {
-                    this.player.velocityX = this.player.speed;
-                } else {
-                    this.player.velocityX = 0;
-                }
-
-                // Update player physics
-                this.player.velocityY += this.player.gravity;
-                this.player.y += this.player.velocityY;
-                this.player.x += this.player.velocityX;
-
-                // Wrap around screen
-                if (this.player.x > this.width) {
-                    this.player.x = 0;
-                } else if (this.player.x < 0) {
-                    this.player.x = this.width;
-                }
-
-                // Check platform collisions
-                for (let platform of this.platforms) {
-                    if (this.player.velocityY > 0 &&
-                        this.player.x < platform.x + platform.width &&
-                        this.player.x + this.player.width > platform.x &&
-                        this.player.y + this.player.height > platform.y &&
-                        this.player.y < platform.y + platform.height) {
-                        
-                        if (platform.type === 'breakable') {
-                            this.platforms = this.platforms.filter(p => p !== platform);
-                        }
-
-                        this.player.velocityY = this.player.jumpForce;
-                        this.score += 10;
-                    }
-                }
-
-                // Camera follow
-                if (this.player.y < this.height / 2) {
-                    let diff = this.height / 2 - this.player.y;
-                    this.player.y += diff;
-                    
-                    for (let platform of this.platforms) {
-                        platform.y += diff;
-                    }
-
-                    // Remove platforms that are off screen
-                    this.platforms = this.platforms.filter(platform => platform.y < this.height);
-
-                    // Add new platforms
-                    while (this.platforms.length < 7) {
-                        this.platforms.push({
-                            x: Math.random() * (this.width - 60),
-                            y: 0,
-                            width: 60,
-                            height: 10,
-                            type: Math.random() < 0.2 ? 'breakable' : 'normal'
-                        });
-                    }
-                }
-
-                // Game over condition
-                if (this.player.y > this.height) {
-                    console.log("Game Over! Score:", this.score);
-                    this.gameOver = true;
-                    if (window.TelegramGameProxy) {
-                        window.TelegramGameProxy.shareScore(this.score);
-                    }
-                }
-            }
-
-            draw() {
-                this.ctx.clearRect(0, 0, this.width, this.height);
-
-                // Draw platforms
-                for (let platform of this.platforms) {
-                    this.ctx.fillStyle = platform.type === 'breakable' ? '#ff9999' : '#66cc66';
-                    this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-                }
-
-                // Draw player
-                this.ctx.fillStyle = '#3366ff';
-                this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height);
-
-                // Draw score
-                this.ctx.fillStyle = '#000';
-                this.ctx.font = '20px Arial';
-                this.ctx.fillText(`Score: ${this.score}`, 10, 30);
-
-                // Game over screen
-                if (this.gameOver) {
-                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                    this.ctx.fillRect(0, 0, this.width, this.height);
-                    this.ctx.fillStyle = '#fff';
-                    this.ctx.font = '30px Arial';
-                    this.ctx.textAlign = 'center';
-                    this.ctx.fillText('Game Over!', this.width/2, this.height/2);
-                    this.ctx.fillText(`Score: ${this.score}`, this.width/2, this.height/2 + 40);
-                }
-            }
-
-            gameLoop() {
-                this.update();
-                this.draw();
-                requestAnimationFrame(() => this.gameLoop());
-            }
-        }
-
-        // Start game when page loads
-        window.onload = () => {
-            console.log("Window loaded, starting game...");
-            new Game();
+<!-- ... previous head content ... -->
+<script>
+class Game {
+    constructor() {
+        // ... previous constructor content ...
+        
+        // Add particle system
+        this.particles = [];
+        this.powerupEffects = {
+            pulseSize: 0,
+            pulseDirection: 1,
+            glowOpacity: 0.5,
+            particleTimer: 0
         };
-    </script>
-</body>
+    }
+
+    // Add this new method for particle creation
+    createParticle() {
+        return {
+            x: this.player.x + this.player.width/2,
+            y: this.player.y + this.player.height/2,
+            size: Math.random() * 4 + 2,
+            speedX: (Math.random() - 0.5) * 4,
+            speedY: (Math.random() - 0.5) * 4,
+            life: 1.0  // Will decrease over time
+        };
+    }
+
+    // Add this method to update particles
+    updateParticles() {
+        // Create new particles when powered up
+        if (this.powerupActive) {
+            this.powerupEffects.particleTimer++;
+            if (this.powerupEffects.particleTimer % 2 === 0) {  // Control particle creation rate
+                this.particles.push(this.createParticle());
+            }
+        }
+
+        // Update existing particles
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const particle = this.particles[i];
+            particle.x += particle.speedX;
+            particle.y += particle.speedY;
+            particle.life -= 0.02;  // Particle fade rate
+            
+            if (particle.life <= 0) {
+                this.particles.splice(i, 1);
+            }
+        }
+
+        // Update pulse effect
+        if (this.powerupActive) {
+            this.powerupEffects.pulseSize += 0.2 * this.powerupEffects.pulseDirection;
+            if (this.powerupEffects.pulseSize > 5 || this.powerupEffects.pulseSize < 0) {
+                this.powerupEffects.pulseDirection *= -1;
+            }
+            
+            this.powerupEffects.glowOpacity = 0.3 + Math.sin(Date.now() / 200) * 0.2;
+        }
+    }
+
+    // Modify the draw method
+    draw() {
+        this.ctx.clearRect(0, 0, this.width, this.height);
+
+        // Draw platforms
+        this.platforms.forEach(platform => {
+            this.ctx.fillStyle = platform.type === 'breakable' ? '#ff9999' : '#66cc66';
+            this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+        });
+
+        // Draw power-ups
+        this.powerups.forEach(powerup => {
+            // Draw glow effect for power-ups
+            const gradient = this.ctx.createRadialGradient(
+                powerup.x + 10, powerup.y + 10, 0,
+                powerup.x + 10, powerup.y + 10, 20
+            );
+            gradient.addColorStop(0, 'rgba(255, 64, 129, 0.8)');
+            gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
+            
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(powerup.x - 10, powerup.y - 10, 40, 40);
+            
+            this.ctx.fillStyle = '#ff4081';
+            this.ctx.beginPath();
+            this.ctx.arc(powerup.x + 10, powerup.y + 10, 10, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+
+        // Draw particles
+        this.particles.forEach(particle => {
+            this.ctx.fillStyle = `rgba(255, 64, 129, ${particle.life})`;
+            this.ctx.beginPath();
+            this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
+            this.ctx.fill();
+        });
+
+        // Draw player with effects when powered up
+        if (this.powerupActive) {
+            // Draw glow effect
+            const gradient = this.ctx.createRadialGradient(
+                this.player.x + this.player.width/2,
+                this.player.y + this.player.height/2,
+                0,
+                this.player.x + this.player.width/2,
+                this.player.y + this.player.height/2,
+                this.player.width
+            );
+            gradient.addColorStop(0, `rgba(255, 64, 129, ${this.powerupEffects.glowOpacity})`);
+            gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
+            
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(
+                this.player.x - 20,
+                this.player.y - 20,
+                this.player.width + 40,
+                this.player.height + 40
+            );
+
+            // Draw pulsing outline
+            this.ctx.strokeStyle = '#ff4081';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(
+                this.player.x - this.powerupEffects.pulseSize,
+                this.player.y - this.powerupEffects.pulseSize,
+                this.player.width + this.powerupEffects.pulseSize * 2,
+                this.player.height + this.powerupEffects.pulseSize * 2
+            );
+        }
+
+        // Draw player
+        this.ctx.fillStyle = this.powerupActive ? '#ff4081' : '#3366ff';
+        this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height);
+
+        // Add shine effect when powered up
+        if (this.powerupActive) {
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+            this.ctx.beginPath();
+            this.ctx.moveTo(this.player.x, this.player.y);
+            this.ctx.lineTo(this.player.x + 15, this.player.y);
+            this.ctx.lineTo(this.player.x, this.player.y + 15);
+            this.ctx.fill();
+        }
+
+        // Draw score
+        this.ctx.fillStyle = '#000';
+        this.ctx.font = '20px Arial';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText(`Score: ${this.score}`, 10, 30);
+    }
+
+    update() {
+        if (this.gameOver) return;
+
+        this.updatePowerup();
+        this.updateParticles();  // Add this line to update particles
+
+        // ... rest of the update method remains the same ...
+    }
+
+    activatePowerup() {
+        this.powerupActive = true;
+        this.powerupTimer = 60;
+        this.player.jumpForce = this.player.baseJumpForce * 1.5;
+        this.powerupEffects = {
+            pulseSize: 0,
+            pulseDirection: 1,
+            glowOpacity: 0.5,
+            particleTimer: 0
+        };
+        document.getElementById('powerupTimer').style.display = 'block';
+    }
+
+    // ... rest of the class remains the same ...
+}
+</script>
 </html>
