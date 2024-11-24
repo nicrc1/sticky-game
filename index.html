@@ -57,14 +57,14 @@
                 // Player properties
                 this.player = {
                     x: this.width / 2,
-                    y: this.height - 100,
+                    y: this.height - 100,  // Start position
                     width: 40,
                     height: 40,
                     velocityY: 0,
                     velocityX: 0,
                     jumpForce: -15,
                     gravity: 0.6,
-                    speed: 5  // Adjusted speed
+                    speed: 5
                 };
 
                 // Game state
@@ -76,6 +76,7 @@
                     right: false
                 };
                 
+                // Initialize game
                 this.initPlatforms();
                 this.setupControls();
                 
@@ -85,15 +86,32 @@
             }
 
             initPlatforms() {
-                for (let i = 0; i < 7; i++) {
+                // Add starting platform directly under the player
+                const startPlatform = {
+                    x: this.width / 2 - 30,  // Center it under player
+                    y: this.height - 50,     // Just below player starting position
+                    width: 100,              // Make it wider for easier start
+                    height: 10,
+                    type: 'normal'           // Make it a normal (non-breakable) platform
+                };
+                this.platforms.push(startPlatform);
+
+                // Add remaining platforms
+                const platformCount = 7;
+                const spacing = this.height / platformCount;
+
+                for (let i = 1; i < platformCount; i++) {
                     this.platforms.push({
                         x: Math.random() * (this.width - 60),
-                        y: i * (this.height / 7),
+                        y: this.height - (spacing * i + Math.random() * 20), // Add some randomness
                         width: 60,
                         height: 10,
                         type: Math.random() < 0.2 ? 'breakable' : 'normal'
                     });
                 }
+
+                // Sort platforms by height to ensure proper collision detection
+                this.platforms.sort((a, b) => b.y - a.y);
             }
 
             setupControls() {
@@ -126,30 +144,24 @@
                 const leftBtn = document.getElementById('leftBtn');
                 const rightBtn = document.getElementById('rightBtn');
 
-                // Touch controls for buttons
-                leftBtn.addEventListener('touchstart', (e) => {
+                const handleTouch = (e, button, isStart) => {
                     e.preventDefault();
-                    this.keys.left = true;
-                });
-                leftBtn.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    this.keys.left = false;
-                });
+                    if (button === 'left') {
+                        this.keys.left = isStart;
+                    } else {
+                        this.keys.right = isStart;
+                    }
+                };
 
-                rightBtn.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    this.keys.right = true;
-                });
-                rightBtn.addEventListener('touchend', (e) => {
-                    e.preventDefault();
-                    this.keys.right = false;
-                });
+                leftBtn.addEventListener('touchstart', (e) => handleTouch(e, 'left', true));
+                leftBtn.addEventListener('touchend', (e) => handleTouch(e, 'left', false));
+                rightBtn.addEventListener('touchstart', (e) => handleTouch(e, 'right', true));
+                rightBtn.addEventListener('touchend', (e) => handleTouch(e, 'right', false));
 
-                // Mouse controls for buttons (for testing)
+                // Mouse controls for testing
                 leftBtn.addEventListener('mousedown', () => this.keys.left = true);
                 leftBtn.addEventListener('mouseup', () => this.keys.left = false);
                 leftBtn.addEventListener('mouseleave', () => this.keys.left = false);
-
                 rightBtn.addEventListener('mousedown', () => this.keys.right = true);
                 rightBtn.addEventListener('mouseup', () => this.keys.right = false);
                 rightBtn.addEventListener('mouseleave', () => this.keys.right = false);
@@ -205,7 +217,10 @@
                         platform.y += diff;
                     }
 
+                    // Remove platforms that are off screen
                     this.platforms = this.platforms.filter(platform => platform.y < this.height);
+
+                    // Add new platforms
                     while (this.platforms.length < 7) {
                         this.platforms.push({
                             x: Math.random() * (this.width - 60),
@@ -245,10 +260,6 @@
                 this.ctx.font = '20px Arial';
                 this.ctx.fillText(`Score: ${this.score}`, 10, 30);
 
-                // Draw debug info
-                this.ctx.fillText(`Left: ${this.keys.left}`, 10, 50);
-                this.ctx.fillText(`Right: ${this.keys.right}`, 10, 70);
-
                 // Game over screen
                 if (this.gameOver) {
                     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -258,8 +269,6 @@
                     this.ctx.textAlign = 'center';
                     this.ctx.fillText('Game Over!', this.width/2, this.height/2);
                     this.ctx.fillText(`Score: ${this.score}`, this.width/2, this.height/2 + 40);
-                    this.ctx.font = '20px Arial';
-                    this.ctx.fillText('Click to play again', this.width/2, this.height/2 + 80);
                 }
             }
 
