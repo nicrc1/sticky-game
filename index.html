@@ -4,22 +4,51 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sticky Game</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #f0f0f0;
+            display: block;
+            margin: 0 auto;
+            touch-action: none;
+        }
+    </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="375" height="600"></canvas>
     <script>
-        // Telegram integration
-        window.TelegramGameProxy = {
-            shareScore: function(score) {
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.sendData(JSON.stringify({
-                        score: score
-                    }));
-                }
+        class Game {
+            constructor() {
+                console.log("Game initializing..."); // Debug log
+                this.canvas = document.getElementById('gameCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.width = this.canvas.width;
+                this.height = this.canvas.height;
+                
+                // Draw something immediately to test
+                this.ctx.fillStyle = '#3366ff';
+                this.ctx.fillRect(50, 50, 100, 100);
+                this.ctx.fillStyle = '#000';
+                this.ctx.font = '20px Arial';
+                this.ctx.fillText('Game Loading...', 50, 200);
             }
+        }
+
+        // Start game when page loads
+        window.onload = () => {
+            console.log("Window loaded"); // Debug log
+            new Game();
         };
     </script>
-    <script src="assets/js/game.js"></script>
 </body>
 </html>
