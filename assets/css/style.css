@@ -1,1 +1,29 @@
+body {
+    margin: 0;
+    padding: 20px;
+    background: #222;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+}
 
+canvas {
+    border: 2px solid #333;
+    background: #f0f0f0;
+    display: block;
+    margin: 0 auto;
+    touch-action: none;
+    max-width: 100%;
+    height: auto;
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+    canvas {
+        width: 100%;
+    }
+}
