@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sticky Game</title>
     <style>
         body {
@@ -10,22 +10,18 @@
             padding: 20px;
             background: #222;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
             min-height: 100vh;
             font-family: Arial, sans-serif;
-            overflow: hidden;
         }
         canvas {
             border: 2px solid #333;
             background: #f0f0f0;
-            display: block;
             margin: 0 auto;
-            touch-action: none;
         }
         #controls {
-            position: fixed;
-            bottom: 20px;
+            margin-top: 20px;
             display: flex;
             gap: 20px;
         }
@@ -36,436 +32,254 @@
             border-radius: 10px;
             color: white;
             font-size: 24px;
-            touch-action: none;
             cursor: pointer;
-        }
-        #gameOverScreen {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            padding: 20px;
-            border-radius: 10px;
-            text-align: center;
-            color: white;
-            display: none;
-        }
-        #playAgainBtn {
-            padding: 10px 20px;
-            font-size: 18px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-top: 20px;
         }
         #powerupTimer {
-            position: fixed;
-            top: 20px;
-            right: 20px;
             color: #ff4081;
             font-size: 20px;
             font-weight: bold;
+            margin-bottom: 10px;
             display: none;
         }
     </style>
 </head>
 <body>
+    <div id="powerupTimer">Power-up: <span id="timer">0</span>s</div>
     <canvas id="gameCanvas" width="375" height="600"></canvas>
     <div id="controls">
         <button class="control-btn" id="leftBtn">←</button>
         <button class="control-btn" id="rightBtn">→</button>
     </div>
-    <div id="powerupTimer">Power-up: <span id="timer">0</span>s</div>
-    <div id="gameOverScreen">
-        <h2>Game Over!</h2>
-        <p>Score: <span id="finalScore">0</span></p>
-        <button id="playAgainBtn">Play Again</button>
-    </div>
 
     <script>
-        class Game {
-            constructor() {
-                this.canvas = document.getElementById('gameCanvas');
-                this.ctx = this.canvas.getContext('2d');
-                this.width = this.canvas.width;
-                this.height = this.canvas.height;
-                
-                this.init();
-                this.setupControls();
-                this.gameLoop();
-            }
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-            init() {
-                // Player properties
-                this.player = {
-                    x: this.width / 2,
-                    y: this.height - 100,
-                    width: 40,
-                    height: 40,
-                    velocityY: 0,
-                    velocityX: 0,
-                    baseJumpForce: -15,
-                    jumpForce: -15,
-                    gravity: 0.6,
-                    speed: 5
-                };
+        const game = {
+            player: {
+                x: canvas.width / 2,
+                y: canvas.height - 100,
+                width: 40,
+                height: 40,
+                velocityX: 0,
+                velocityY: 0,
+                speed: 5,
+                jumpForce: -15,
+                gravity: 0.6
+            },
+            platforms: [],
+            powerups: [],
+            score: 0,
+            powerupActive: false,
+            powerupTimer: 0,
+            keys: { left: false, right: false }
+        };
 
-                // Game state
-                this.score = 0;
-                this.gameOver = false;
-                this.platforms = [];
-                this.powerups = [];
-                this.particles = [];
-                this.powerupActive = false;
-                this.powerupTimer = 0;
-                this.powerupEffects = {
-                    pulseSize: 0,
-                    pulseDirection: 1,
-                    glowOpacity: 0.5,
-                    particleTimer: 0
-                };
-                this.keys = { left: false, right: false };
+        // Initialize platforms
+        function initPlatforms() {
+            // Starting platform
+            game.platforms.push({
+                x: canvas.width / 2 - 50,
+                y: canvas.height - 50,
+                width: 100,
+                height: 10,
+                type: 'normal'
+            });
 
-                this.initPlatforms();
-            }
-
-            initPlatforms() {
-                // Starting platform
-                this.platforms = [{
-                    x: this.width / 2 - 50,
-                    y: this.height - 50,
-                    width: 100,
-                    height: 10,
-                    type: 'normal'
-                }];
-
-                // Add more platforms
-                for (let i = 1; i < 7; i++) {
-                    this.addPlatform(this.height - (i * 100));
-                }
-            }
-            addPlatform(y) {
-                const platform = {
-                    x: Math.random() * (this.width - 60),
-                    y: y,
-                    width: 60,
-                    height: 10,
-                    type: Math.random() < 0.2 ? 'breakable' : 'normal'
-                };
-
-                if (Math.random() < 0.2) {
-                    this.powerups.push({
-                        x: platform.x + platform.width/2 - 10,
-                        y: platform.y - 30,
-                        width: 20,
-                        height: 20,
-                        type: 'jumpBoost'
-                    });
-                }
-
-                this.platforms.push(platform);
-            }
-
-            createParticle() {
-                return {
-                    x: this.player.x + this.player.width/2,
-                    y: this.player.y + this.player.height/2,
-                    size: Math.random() * 4 + 2,
-                    speedX: (Math.random() - 0.5) * 4,
-                    speedY: (Math.random() - 0.5) * 4,
-                    life: 1.0
-                };
-            }
-
-            setupControls() {
-                document.addEventListener('keydown', (e) => {
-                    switch(e.key) {
-                        case 'ArrowLeft':
-                            this.keys.left = true;
-                            break;
-                        case 'ArrowRight':
-                            this.keys.right = true;
-                            break;
-                    }
-                });
-
-                document.addEventListener('keyup', (e) => {
-                    switch(e.key) {
-                        case 'ArrowLeft':
-                            this.keys.left = false;
-                            break;
-                        case 'ArrowRight':
-                            this.keys.right = false;
-                            break;
-                    }
-                });
-
-                const leftBtn = document.getElementById('leftBtn');
-                const rightBtn = document.getElementById('rightBtn');
-
-                // Touch controls
-                const handleTouch = (e, button, isStart) => {
-                    e.preventDefault();
-                    if (button === 'left') {
-                        this.keys.left = isStart;
-                    } else {
-                        this.keys.right = isStart;
-                    }
-                };
-
-                leftBtn.addEventListener('touchstart', (e) => handleTouch(e, 'left', true));
-                leftBtn.addEventListener('touchend', (e) => handleTouch(e, 'left', false));
-                rightBtn.addEventListener('touchstart', (e) => handleTouch(e, 'right', true));
-                rightBtn.addEventListener('touchend', (e) => handleTouch(e, 'right', false));
-
-                // Mouse controls
-                leftBtn.addEventListener('mousedown', () => this.keys.left = true);
-                leftBtn.addEventListener('mouseup', () => this.keys.left = false);
-                leftBtn.addEventListener('mouseleave', () => this.keys.left = false);
-                rightBtn.addEventListener('mousedown', () => this.keys.right = true);
-                rightBtn.addEventListener('mouseup', () => this.keys.right = false);
-                rightBtn.addEventListener('mouseleave', () => this.keys.right = false);
-            }
-
-            updateParticles() {
-                if (this.powerupActive) {
-                    this.powerupEffects.particleTimer++;
-                    if (this.powerupEffects.particleTimer % 2 === 0) {
-                        this.particles.push(this.createParticle());
-                    }
-                }
-
-                for (let i = this.particles.length - 1; i >= 0; i--) {
-                    const particle = this.particles[i];
-                    particle.x += particle.speedX;
-                    particle.y += particle.speedY;
-                    particle.life -= 0.02;
-                    
-                    if (particle.life <= 0) {
-                        this.particles.splice(i, 1);
-                    }
-                }
-
-                if (this.powerupActive) {
-                    this.powerupEffects.pulseSize += 0.2 * this.powerupEffects.pulseDirection;
-                    if (this.powerupEffects.pulseSize > 5 || this.powerupEffects.pulseSize < 0) {
-                        this.powerupEffects.pulseDirection *= -1;
-                    }
-                    
-                    this.powerupEffects.glowOpacity = 0.3 + Math.sin(Date.now() / 200) * 0.2;
-                }
-            }
-
-            updatePowerup() {
-                if (this.powerupActive) {
-                    this.powerupTimer--;
-                    document.getElementById('timer').textContent = this.powerupTimer;
-                    
-                    if (this.powerupTimer <= 0) {
-                        this.powerupActive = false;
-                        this.player.jumpForce = this.player.baseJumpForce;
-                        document.getElementById('powerupTimer').style.display = 'none';
-                    }
-                }
-            }
-
-            update() {
-                if (this.gameOver) return;
-
-                this.updatePowerup();
-                this.updateParticles();
-
-                if (this.keys.left) {
-                    this.player.velocityX = -this.player.speed;
-                } else if (this.keys.right) {
-                    this.player.velocityX = this.player.speed;
-                } else {
-                    this.player.velocityX = 0;
-                }
-
-                this.player.velocityY += this.player.gravity;
-                this.player.y += this.player.velocityY;
-                this.player.x += this.player.velocityX;
-
-                if (this.player.x > this.width) {
-                    this.player.x = 0;
-                } else if (this.player.x < 0) {
-                    this.player.x = this.width;
-                }
-
-                // Check collisions
-                for (let i = this.powerups.length - 1; i >= 0; i--) {
-                    const powerup = this.powerups[i];
-                    if (this.checkCollision(this.player, powerup)) {
-                        this.powerups.splice(i, 1);
-                        this.activatePowerup();
-                    }
-                }
-
-                for (let platform of this.platforms) {
-                    if (this.player.velocityY > 0 && this.checkCollision(this.player, platform)) {
-                        if (platform.type === 'breakable') {
-                            this.platforms = this.platforms.filter(p => p !== platform);
-                        }
-                        this.player.velocityY = this.player.jumpForce;
-                        this.score += 10;
-                    }
-                }
-
-                // Camera follow
-                if (this.player.y < this.height / 2) {
-                    const diff = this.height / 2 - this.player.y;
-                    this.player.y += diff;
-                    
-                    this.platforms.forEach(platform => platform.y += diff);
-                    this.powerups.forEach(powerup => powerup.y += diff);
-                    this.particles.forEach(particle => particle.y += diff);
-
-                    this.platforms = this.platforms.filter(platform => platform.y < this.height);
-                    this.powerups = this.powerups.filter(powerup => powerup.y < this.height);
-
-                    while (this.platforms.length < 7) {
-                        this.addPlatform(0);
-                    }
-                }
-
-                if (this.player.y > this.height) {
-                    this.gameOver = true;
-                    this.showGameOver();
-                }
-            }
-
-            checkCollision(a, b) {
-                return a.x < b.x + b.width &&
-                       a.x + a.width > b.x &&
-                       a.y < b.y + b.height &&
-                       a.y + a.height > b.y;
-            }
-
-            draw() {
-                this.ctx.clearRect(0, 0, this.width, this.height);
-
-                // Draw platforms
-                this.platforms.forEach(platform => {
-                    this.ctx.fillStyle = platform.type === 'breakable' ? '#ff9999' : '#66cc66';
-                    this.ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
-                });
-
-                // Draw power-ups with glow
-                this.powerups.forEach(powerup => {
-                    // Glow effect
-                    const gradient = this.ctx.createRadialGradient(
-                        powerup.x + 10, powerup.y + 10, 0,
-                        powerup.x + 10, powerup.y + 10, 20
-                    );
-                    gradient.addColorStop(0, 'rgba(255, 64, 129, 0.8)');
-                    gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
-                    
-                    this.ctx.fillStyle = gradient;
-                    this.ctx.fillRect(powerup.x - 10, powerup.y - 10, 40, 40);
-                    
-                    this.ctx.fillStyle = '#ff4081';
-                    this.ctx.beginPath();
-                    this.ctx.arc(powerup.x + 10, powerup.y + 10, 10, 0, Math.PI * 2);
-                    this.ctx.fill();
-                });
-
-                // Draw particles
-                this.particles.forEach(particle => {
-                    this.ctx.fillStyle = `rgba(255, 64, 129, ${particle.life})`;
-                    this.ctx.beginPath();
-                    this.ctx.arc(particle.x, particle.y, particle.size, 0, Math.PI * 2);
-                    this.ctx.fill();
-                });
-
-                // Draw player with power-up effects
-                if (this.powerupActive) {
-                    // Glow
-                    const gradient = this.ctx.createRadialGradient(
-                        this.player.x + this.player.width/2,
-                        this.player.y + this.player.height/2,
-                        0,
-                        this.player.x + this.player.width/2,
-                        this.player.y + this.player.height/2,
-                        this.player.width
-                    );
-                    gradient.addColorStop(0, `rgba(255, 64, 129, ${this.powerupEffects.glowOpacity})`);
-                    gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
-                    
-                    this.ctx.fillStyle = gradient;
-                    this.ctx.fillRect(
-                        this.player.x - 20,
-                        this.player.y - 20,
-                        this.player.width + 40,
-                        this.player.height + 40
-                    );
-
-                    // Pulse effect
-                    this.ctx.strokeStyle = '#ff4081';
-                    this.ctx.lineWidth = 2;
-                    this.ctx.strokeRect(
-                        this.player.x - this.powerupEffects.pulseSize,
-                        this.player.y - this.powerupEffects.pulseSize,
-                        this.player.width + this.powerupEffects.pulseSize * 2,
-                        this.player.height + this.powerupEffects.pulseSize * 2
-                    );
-                }
-
-                // Draw player
-                this.ctx.fillStyle = this.powerupActive ? '#ff4081' : '#3366ff';
-                this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height);
-
-                // Score
-                this.ctx.fillStyle = '#000';
-                this.ctx.font = '20px Arial';
-                this.ctx.textAlign = 'left';
-                this.ctx.fillText(`Score: ${this.score}`, 10, 30);
-            }
-
-            activatePowerup() {
-                this.powerupActive = true;
-                this.powerupTimer = 60;
-                this.player.jumpForce = this.player.baseJumpForce * 1.5;
-                document.getElementById('powerupTimer').style.display = 'block';
-                this.powerupEffects = {
-                    pulseSize: 0,
-                    pulseDirection: 1,
-                    glowOpacity: 0.5,
-                    particleTimer: 0
-                };
-            }
-
-            showGameOver() {
-                document.getElementById('finalScore').textContent = this.score;
-                document.getElementById('gameOverScreen').style.display = 'block';
-                if (window.TelegramGameProxy) {
-                    window.TelegramGameProxy.shareScore(this.score);
-                }
-            }
-
-            restart() {
-                document.getElementById('gameOverScreen').style.display = 'none';
-                document.getElementById('powerupTimer').style.display = 'none';
-                this.init();
-            }
-
-            gameLoop() {
-                this.update();
-                this.draw();
-                requestAnimationFrame(() => this.gameLoop());
+            // Add more platforms
+            for (let i = 1; i < 7; i++) {
+                addPlatform(canvas.height - (i * 100));
             }
         }
 
-        // Initialize game and setup restart functionality
-        window.onload = () => {
-            let game = new Game();
-            document.getElementById('playAgainBtn').addEventListener('click', () => {
-                game.restart();
+        function addPlatform(y) {
+            const platform = {
+                x: Math.random() * (canvas.width - 60),
+                y: y,
+                width: 60,
+                height: 10,
+                type: Math.random() < 0.2 ? 'breakable' : 'normal'
+            };
+
+            if (Math.random() < 0.2) {
+                game.powerups.push({
+                    x: platform.x + platform.width/2 - 10,
+                    y: platform.y - 30,
+                    width: 20,
+                    height: 20
+                });
+            }
+
+            game.platforms.push(platform);
+        }
+
+        function update() {
+            // Player movement
+            if (game.keys.left) game.player.velocityX = -game.player.speed;
+            else if (game.keys.right) game.player.velocityX = game.player.speed;
+            else game.player.velocityX = 0;
+
+            // Apply gravity
+            game.player.velocityY += game.player.gravity;
+            game.player.y += game.player.velocityY;
+            game.player.x += game.player.velocityX;
+
+            // Screen wrapping
+            if (game.player.x > canvas.width) game.player.x = 0;
+            else if (game.player.x < 0) game.player.x = canvas.width;
+
+            // Platform collision
+            for (let platform of game.platforms) {
+                if (game.player.velocityY > 0 && // Moving down
+                    game.player.x < platform.x + platform.width &&
+                    game.player.x + game.player.width > platform.x &&
+                    game.player.y + game.player.height > platform.y &&
+                    game.player.y < platform.y + platform.height) {
+                    
+                    if (platform.type === 'breakable') {
+                        game.platforms = game.platforms.filter(p => p !== platform);
+                    }
+                    game.player.velocityY = game.powerupActive ? game.player.jumpForce * 1.5 : game.player.jumpForce;
+                    game.score += 10;
+                }
+            }
+
+            // Powerup collision
+            for (let i = game.powerups.length - 1; i >= 0; i--) {
+                const powerup = game.powerups[i];
+                if (game.player.x < powerup.x + powerup.width &&
+                    game.player.x + game.player.width > powerup.x &&
+                    game.player.y < powerup.y + powerup.height &&
+                    game.player.y + game.player.height > powerup.y) {
+                    game.powerups.splice(i, 1);
+                    activatePowerup();
+                }
+            }
+
+            // Camera follow
+            if (game.player.y < canvas.height / 2) {
+                const diff = canvas.height / 2 - game.player.y;
+                game.player.y += diff;
+                
+                game.platforms.forEach(p => p.y += diff);
+                game.powerups.forEach(p => p.y += diff);
+
+                // Remove and add platforms
+                game.platforms = game.platforms.filter(p => p.y < canvas.height);
+                game.powerups = game.powerups.filter(p => p.y < canvas.height);
+
+                while (game.platforms.length < 7) {
+                    addPlatform(0);
+                }
+            }
+
+            // Power-up timer
+            if (game.powerupActive) {
+                game.powerupTimer--;
+                document.getElementById('timer').textContent = game.powerupTimer;
+                if (game.powerupTimer <= 0) {
+                    game.powerupActive = false;
+                    document.getElementById('powerupTimer').style.display = 'none';
+                }
+            }
+
+            // Game over
+            if (game.player.y > canvas.height) {
+                if (window.TelegramGameProxy) {
+                    window.TelegramGameProxy.shareScore(game.score);
+                }
+                resetGame();
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw platforms
+            game.platforms.forEach(platform => {
+                ctx.fillStyle = platform.type === 'breakable' ? '#ff9999' : '#66cc66';
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
             });
-        };
+
+            // Draw powerups
+            game.powerups.forEach(powerup => {
+                ctx.fillStyle = '#ff4081';
+                ctx.beginPath();
+                ctx.arc(powerup.x + 10, powerup.y + 10, 10, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Draw player with power-up effect
+            if (game.powerupActive) {
+                ctx.fillStyle = '#ff4081';
+                ctx.globalAlpha = 0.3;
+                ctx.fillRect(game.player.x - 5, game.player.y - 5, 
+                           game.player.width + 10, game.player.height + 10);
+                ctx.globalAlpha = 1;
+            }
+            
+            // Draw player
+            ctx.fillStyle = game.powerupActive ? '#ff4081' : '#3366ff';
+            ctx.fillRect(game.player.x, game.player.y, game.player.width, game.player.height);
+
+            // Draw score
+            ctx.fillStyle = '#000';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${game.score}`, 10, 30);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function activatePowerup() {
+            game.powerupActive = true;
+            game.powerupTimer = 60;
+            document.getElementById('powerupTimer').style.display = 'block';
+        }
+
+        function resetGame() {
+            game.player.x = canvas.width / 2;
+            game.player.y = canvas.height - 100;
+            game.player.velocityY = 0;
+            game.player.velocityX = 0;
+            game.platforms = [];
+            game.powerups = [];
+            game.score = 0;
+            game.powerupActive = false;
+            document.getElementById('powerupTimer').style.display = 'none';
+            initPlatforms();
+        }
+
+        // Controls
+        document.addEventListener('keydown', e => {
+            if (e.key === 'ArrowLeft') game.keys.left = true;
+            if (e.key === 'ArrowRight') game.keys.right = true;
+        });
+
+        document.addEventListener('keyup', e => {
+            if (e.key === 'ArrowLeft') game.keys.left = false;
+            if (e.key === 'ArrowRight') game.keys.right = false;
+        });
+
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+
+        leftBtn.addEventListener('mousedown', () => game.keys.left = true);
+        leftBtn.addEventListener('mouseup', () => game.keys.left = false);
+        leftBtn.addEventListener('touchstart', () => game.keys.left = true);
+        leftBtn.addEventListener('touchend', () => game.keys.left = false);
+
+        rightBtn.addEventListener('mousedown', () => game.keys.right = true);
+        rightBtn.addEventListener('mouseup', () => game.keys.right = false);
+        rightBtn.addEventListener('touchstart', () => game.keys.right = true);
+        rightBtn.addEventListener('touchend', () => game.keys.right = false);
+
+        // Start game
+        initPlatforms();
+        gameLoop();
     </script>
 </body>
 </html>
