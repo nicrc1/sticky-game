@@ -41,10 +41,24 @@
             margin-bottom: 10px;
             display: none;
         }
+        #stats {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: black;
+            font-size: 20px;
+            font-weight: bold;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
     <div id="powerupTimer">SUPER JUMP: <span id="timer">0</span>s</div>
+    <div id="stats">
+        Score: <span id="score">0</span> | Coins: <span id="coins">0</span>
+    </div>
     <canvas id="gameCanvas" width="375" height="600"></canvas>
     <div id="controls">
         <button class="control-btn" id="leftBtn">←</button>
@@ -69,11 +83,43 @@
             },
             platforms: [],
             powerups: [],
+            coins: [],
             score: 0,
+            coinsCollected: 0,
             powerupActive: false,
             powerupTimer: 0,
             keys: { left: false, right: false }
         };
+
+        function drawSeven(x, y, scale = 1) {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.scale(scale, scale);
+            
+            // Gold gradient
+            const gradient = ctx.createLinearGradient(0, 0, 10, 20);
+            gradient.addColorStop(0, '#FFD700');    // Gold
+            gradient.addColorStop(0.5, '#FFF3B0');  // Light gold
+            gradient.addColorStop(1, '#FFD700');    // Gold
+            
+            ctx.strokeStyle = gradient;
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(0, 0);      // Top left
+            ctx.lineTo(15, 0);     // Top horizontal line
+            ctx.lineTo(5, 20);     // Diagonal line
+            ctx.stroke();
+            
+            // Add shine effect
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(2, 2);
+            ctx.lineTo(8, 2);
+            ctx.stroke();
+            
+            ctx.restore();
+        }
 
         function initPlatforms() {
             // Starting platform
@@ -100,7 +146,7 @@
                 type: Math.random() < 0.2 ? 'breakable' : 'normal'
             };
 
-            // Reduced power-up spawn rate to 5%
+            // Add powerup (5% chance)
             if (Math.random() < 0.05) {
                 game.powerups.push({
                     x: platform.x + platform.width/2 - 10,
@@ -110,10 +156,20 @@
                 });
             }
 
+            // Add coin (5% chance)
+            if (Math.random() < 0.05) {
+                game.coins.push({
+                    x: platform.x + platform.width/2 - 10,
+                    y: platform.y - 30,
+                    width: 15,
+                    height: 20
+                });
+            }
+
             game.platforms.push(platform);
         }
 
-        function update() {
+function update() {
             // Player movement
             if (game.keys.left) game.player.velocityX = -game.player.speed;
             else if (game.keys.right) game.player.velocityX = game.player.speed;
@@ -138,9 +194,24 @@
                     if (platform.type === 'breakable') {
                         game.platforms = game.platforms.filter(p => p !== platform);
                     }
-                    // Increased power-up jump boost
                     game.player.velocityY = game.powerupActive ? game.player.jumpForce * 2 : game.player.jumpForce;
                     game.score += 10;
+                    document.getElementById('score').textContent = game.score;
+                }
+            }
+
+            // Coin collision
+            for (let i = game.coins.length - 1; i >= 0; i--) {
+                const coin = game.coins[i];
+                if (game.player.x < coin.x + coin.width &&
+                    game.player.x + game.player.width > coin.x &&
+                    game.player.y < coin.y + coin.height &&
+                    game.player.y + game.player.height > coin.y) {
+                    game.coins.splice(i, 1);
+                    game.coinsCollected++;
+                    game.score += 50; // Bonus points for coins
+                    document.getElementById('coins').textContent = game.coinsCollected;
+                    document.getElementById('score').textContent = game.score;
                 }
             }
 
@@ -163,16 +234,18 @@
                 
                 game.platforms.forEach(p => p.y += diff);
                 game.powerups.forEach(p => p.y += diff);
+                game.coins.forEach(c => c.y += diff);
 
                 game.platforms = game.platforms.filter(p => p.y < canvas.height);
                 game.powerups = game.powerups.filter(p => p.y < canvas.height);
+                game.coins = game.coins.filter(c => c.y < canvas.height);
 
                 while (game.platforms.length < 7) {
                     addPlatform(0);
                 }
             }
 
-            // Power-up timer (10 seconds)
+            // Power-up timer
             if (game.powerupActive) {
                 game.powerupTimer--;
                 document.getElementById('timer').textContent = Math.ceil(game.powerupTimer / 60);
@@ -200,9 +273,14 @@
                 ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
             });
 
-            // Draw powerups with animation
+            // Draw coins with animation
+            game.coins.forEach(coin => {
+                const bounce = Math.sin(Date.now() / 200) * 2; // Bouncing animation
+                drawSeven(coin.x, coin.y + bounce, 1);
+            });
+
+            // Draw powerups with glow
             game.powerups.forEach(powerup => {
-                // Glowing effect
                 const gradient = ctx.createRadialGradient(
                     powerup.x + 10, powerup.y + 10, 0,
                     powerup.x + 10, powerup.y + 10, 15
@@ -215,7 +293,6 @@
                 ctx.arc(powerup.x + 10, powerup.y + 10, 12, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Inner star
                 ctx.fillStyle = '#fff';
                 ctx.beginPath();
                 ctx.arc(powerup.x + 10, powerup.y + 10, 6, 0, Math.PI * 2);
@@ -224,7 +301,6 @@
 
             // Draw player with power-up effect
             if (game.powerupActive) {
-                // Glow effect
                 const gradient = ctx.createRadialGradient(
                     game.player.x + game.player.width/2,
                     game.player.y + game.player.height/2,
@@ -248,11 +324,6 @@
             // Draw player
             ctx.fillStyle = game.powerupActive ? '#ff4081' : '#3366ff';
             ctx.fillRect(game.player.x, game.player.y, game.player.width, game.player.height);
-
-            // Draw score
-            ctx.fillStyle = '#000';
-            ctx.font = '20px Arial';
-            ctx.fillText(`Score: ${game.score}`, 10, 30);
         }
 
         function gameLoop() {
@@ -263,8 +334,7 @@
 
         function activatePowerup() {
             game.powerupActive = true;
-            // Set timer to 10 seconds (60 fps * 10 seconds)
-            game.powerupTimer = 60 * 10;
+            game.powerupTimer = 60 * 10; // 10 seconds
             document.getElementById('powerupTimer').style.display = 'block';
         }
 
@@ -275,9 +345,13 @@
             game.player.velocityX = 0;
             game.platforms = [];
             game.powerups = [];
+            game.coins = [];
             game.score = 0;
+            game.coinsCollected = 0;
             game.powerupActive = false;
             document.getElementById('powerupTimer').style.display = 'none';
+            document.getElementById('score').textContent = '0';
+            document.getElementById('coins').textContent = '0';
             initPlatforms();
         }
 
