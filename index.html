@@ -44,7 +44,7 @@
     </style>
 </head>
 <body>
-    <div id="powerupTimer">Power-up: <span id="timer">0</span>s</div>
+    <div id="powerupTimer">SUPER JUMP: <span id="timer">0</span>s</div>
     <canvas id="gameCanvas" width="375" height="600"></canvas>
     <div id="controls">
         <button class="control-btn" id="leftBtn">←</button>
@@ -75,7 +75,6 @@
             keys: { left: false, right: false }
         };
 
-        // Initialize platforms
         function initPlatforms() {
             // Starting platform
             game.platforms.push({
@@ -101,7 +100,8 @@
                 type: Math.random() < 0.2 ? 'breakable' : 'normal'
             };
 
-            if (Math.random() < 0.2) {
+            // Reduced power-up spawn rate to 5%
+            if (Math.random() < 0.05) {
                 game.powerups.push({
                     x: platform.x + platform.width/2 - 10,
                     y: platform.y - 30,
@@ -119,7 +119,6 @@
             else if (game.keys.right) game.player.velocityX = game.player.speed;
             else game.player.velocityX = 0;
 
-            // Apply gravity
             game.player.velocityY += game.player.gravity;
             game.player.y += game.player.velocityY;
             game.player.x += game.player.velocityX;
@@ -130,7 +129,7 @@
 
             // Platform collision
             for (let platform of game.platforms) {
-                if (game.player.velocityY > 0 && // Moving down
+                if (game.player.velocityY > 0 && 
                     game.player.x < platform.x + platform.width &&
                     game.player.x + game.player.width > platform.x &&
                     game.player.y + game.player.height > platform.y &&
@@ -139,7 +138,8 @@
                     if (platform.type === 'breakable') {
                         game.platforms = game.platforms.filter(p => p !== platform);
                     }
-                    game.player.velocityY = game.powerupActive ? game.player.jumpForce * 1.5 : game.player.jumpForce;
+                    // Increased power-up jump boost
+                    game.player.velocityY = game.powerupActive ? game.player.jumpForce * 2 : game.player.jumpForce;
                     game.score += 10;
                 }
             }
@@ -164,7 +164,6 @@
                 game.platforms.forEach(p => p.y += diff);
                 game.powerups.forEach(p => p.y += diff);
 
-                // Remove and add platforms
                 game.platforms = game.platforms.filter(p => p.y < canvas.height);
                 game.powerups = game.powerups.filter(p => p.y < canvas.height);
 
@@ -173,10 +172,10 @@
                 }
             }
 
-            // Power-up timer
+            // Power-up timer (10 seconds)
             if (game.powerupActive) {
                 game.powerupTimer--;
-                document.getElementById('timer').textContent = game.powerupTimer;
+                document.getElementById('timer').textContent = Math.ceil(game.powerupTimer / 60);
                 if (game.powerupTimer <= 0) {
                     game.powerupActive = false;
                     document.getElementById('powerupTimer').style.display = 'none';
@@ -201,21 +200,49 @@
                 ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
             });
 
-            // Draw powerups
+            // Draw powerups with animation
             game.powerups.forEach(powerup => {
-                ctx.fillStyle = '#ff4081';
+                // Glowing effect
+                const gradient = ctx.createRadialGradient(
+                    powerup.x + 10, powerup.y + 10, 0,
+                    powerup.x + 10, powerup.y + 10, 15
+                );
+                gradient.addColorStop(0, '#ff4081');
+                gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
+                
+                ctx.fillStyle = gradient;
                 ctx.beginPath();
-                ctx.arc(powerup.x + 10, powerup.y + 10, 10, 0, Math.PI * 2);
+                ctx.arc(powerup.x + 10, powerup.y + 10, 12, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Inner star
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(powerup.x + 10, powerup.y + 10, 6, 0, Math.PI * 2);
                 ctx.fill();
             });
 
             // Draw player with power-up effect
             if (game.powerupActive) {
-                ctx.fillStyle = '#ff4081';
-                ctx.globalAlpha = 0.3;
-                ctx.fillRect(game.player.x - 5, game.player.y - 5, 
-                           game.player.width + 10, game.player.height + 10);
-                ctx.globalAlpha = 1;
+                // Glow effect
+                const gradient = ctx.createRadialGradient(
+                    game.player.x + game.player.width/2,
+                    game.player.y + game.player.height/2,
+                    0,
+                    game.player.x + game.player.width/2,
+                    game.player.y + game.player.height/2,
+                    game.player.width
+                );
+                gradient.addColorStop(0, 'rgba(255, 64, 129, 0.5)');
+                gradient.addColorStop(1, 'rgba(255, 64, 129, 0)');
+                
+                ctx.fillStyle = gradient;
+                ctx.fillRect(
+                    game.player.x - 10,
+                    game.player.y - 10,
+                    game.player.width + 20,
+                    game.player.height + 20
+                );
             }
             
             // Draw player
@@ -236,7 +263,8 @@
 
         function activatePowerup() {
             game.powerupActive = true;
-            game.powerupTimer = 60;
+            // Set timer to 10 seconds (60 fps * 10 seconds)
+            game.powerupTimer = 60 * 10;
             document.getElementById('powerupTimer').style.display = 'block';
         }
 
@@ -253,7 +281,7 @@
             initPlatforms();
         }
 
-        // Controls
+        // Controls setup
         document.addEventListener('keydown', e => {
             if (e.key === 'ArrowLeft') game.keys.left = true;
             if (e.key === 'ArrowRight') game.keys.right = true;
